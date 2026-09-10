@@ -1,0 +1,11 @@
+{
+  "name": "epic-jornada-qualificacao",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check public/app.js && node --check public/scoring.js && node scripts/validate-workflows.mjs",
+    "smoke:browser": "node scripts/browser-smoke.mjs"
+  }
+}

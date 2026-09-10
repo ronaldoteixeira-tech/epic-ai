@@ -1,0 +1,5 @@
+N8N_LEAD_WEBHOOK_URL=https://n8n.seudominio.com/webhook/epic-leads
+N8N_AVAILABILITY_WEBHOOK_URL=https://n8n.seudominio.com/webhook/epic-calendar-availability
+N8N_BOOKING_WEBHOOK_URL=https://n8n.seudominio.com/webhook/epic-calendar-booking
+N8N_WEBHOOK_SECRET=substitua-por-um-segredo-longo-e-aleatorio
+X-EPIC-Webhook-Secret=c4fcfbc7fc5e172de8c8a0cc3ef197cc393b89dae826aa685155217a01d36c47

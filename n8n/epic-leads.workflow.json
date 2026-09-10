@@ -1,0 +1,167 @@
+{
+  "name": "EPIC — Qualificação, Sheets e roteamento",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "epic-leads",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-920, 0],
+      "id": "2bfefb42-a6fd-4ce4-b26a-9690a7c0c25a",
+      "name": "Webhook — Leads",
+      "webhookId": "f2f205be-d080-4bbb-a43c-b3a71bc436e1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $input.first().json;\nconst body = source.body ?? source;\nif (!body.lead_id || !body.event || !body.contact || !body.answers) throw new Error('Payload EPIC inválido');\nconst a = body.answers;\nlet score = 0;\nconst capital = {'Acima de US$ 100 mil':40,'US$ 30 mil a US$ 100 mil':30,'US$ 15 mil a US$ 30 mil':20};\nconst prazo = {'Neste mês':25,'Em 30 a 60 dias':15};\nscore += capital[a.epic_capital_90d] ?? 0;\nscore += prazo[a.epic_prazo_aporte] ?? 0;\nif (Number(a.epic_prioridade_0a10) >= 8) score += 20;\nif (a.epic_liquidez === 'Parado em conta / CDI') score += 10;\nif (Array.isArray(a.epic_estrutura_us) && a.epic_estrutura_us.some(v => v !== 'Nenhuma ainda')) score += 5;\nscore = Math.max(0, Math.min(100, score));\nconst complete = body.event === 'quiz_concluido';\nconst hardGate = a.epic_capital_90d === 'Menos de US$ 15 mil (ainda montando)' || a.epic_momento === 'Ainda estou estudando. Não pretendo alocar capital nos próximos 6 meses.';\nlet route = 'in_progress', tag = 'em_qualificacao', duration = '', reason = 'Jornada ainda não concluída.';\nif (complete && hardGate) { route='nutrition'; tag='nao_qualificado'; reason='Sem ticket mínimo ou sem intenção de aporte nos próximos 6 meses.'; }\nelse if (complete && score < 40) { route='nutrition'; tag='nutricao_score'; reason='Score abaixo de 40 pontos; segue para maturação antes da agenda.'; }\nelse if (complete && a.epic_momento?.startsWith('Tenho US$ 100 mil')) { route='strategic_45'; tag='estrategico'; duration=45; reason='Lead estratégico elegível para agenda prioritária de 45 minutos.'; }\nelse if (complete && a.epic_momento?.startsWith('Tenho US$ 30 mil')) { route='calendar_45'; tag='qualificado_alto'; duration=45; reason='Lead qualificado para agenda de 45 minutos.'; }\nelse if (complete) { route='calendar_30'; tag='qualificado_entrada'; duration=30; reason='Lead qualificado para agenda de entrada de 30 minutos.'; }\nconst temperature = route === 'nutrition' ? 'frio' : score >= 70 ? 'quente' : score >= 40 ? 'morno' : 'frio';\nconst t = body.tracking ?? {};\nconst row = {\n  lead_id: body.lead_id, created_at: body.client_started_at, updated_at: body.occurred_at,\n  last_event_id: body.event_id, last_event: body.event, current_stage: body.stage, current_screen: body.screen, progress_percent: body.progress_percent,\n  nome: body.contact.nome ?? '', whatsapp: body.contact.whatsapp ?? '', email: body.contact.email ?? '',\n  epic_perfil: a.epic_perfil ?? '', epic_estrutura_us: Array.isArray(a.epic_estrutura_us) ? a.epic_estrutura_us.join(' | ') : '',\n  epic_experiencia_exterior: a.epic_experiencia_exterior ?? '', epic_objecao_principal: a.epic_objecao_principal ?? '',\n  epic_capital_90d: a.epic_capital_90d ?? '', epic_liquidez: a.epic_liquidez ?? '', epic_expectativa_retorno: a.epic_expectativa_retorno ?? '',\n  epic_motivador: a.epic_motivador ?? '', epic_prioridade_0a10: a.epic_prioridade_0a10 ?? '', epic_prazo_aporte: a.epic_prazo_aporte ?? '',\n  epic_momento: a.epic_momento ?? '', epic_objecao_final: a.epic_objecao_final ?? '', epic_score: score, lead_temperature: temperature,\n  route_key: route, tag, calendar_duration: duration, qualification_reason: reason, completed_at: complete ? body.occurred_at : '',\n  utm_source: t.utm_source ?? '', utm_medium: t.utm_medium ?? '', utm_campaign: t.utm_campaign ?? '', utm_content: t.utm_content ?? '', utm_term: t.utm_term ?? '',\n  fbclid: t.fbclid ?? '', gclid: t.gclid ?? '', creative_id: t.creative_id ?? '', landing_url: t.landing_url ?? '', referrer: t.referrer ?? '',\n  calendar_event_id: '', meeting_start: '', meeting_end: '', meet_url: '', payload_json: JSON.stringify(body)\n};\nreturn [{json: row}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-680, 0],
+      "id": "37839112-cf7a-4db2-a11c-1e88cf54d42f",
+      "name": "Validar, pontuar e normalizar"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Eventos", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": { "handlingExtraData": "ignoreIt" }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [-430, 0],
+      "id": "006a19c2-8681-4c47-9c7f-98aba918df1a",
+      "name": "Sheets — Registrar evento"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Leads", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": ["lead_id"],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": { "handlingExtraData": "ignoreIt" }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [-180, 0],
+      "id": "18f3aab4-d8f2-4278-a055-7473af500b17",
+      "name": "Sheets — Atualizar lead"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, classification: { score: $json.epic_score, temperature: $json.lead_temperature, route: $json.route_key, tag: $json.tag, calendarDuration: $json.calendar_duration || null, reason: $json.qualification_reason } } }}",
+        "options": { "responseCode": 200 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [70, 0],
+      "id": "316de58c-0a0f-4a7a-891e-c5cddcc7672d",
+      "name": "Responder ao site"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 }, "conditions": [{ "leftValue": "={{ $json.route_key }}", "rightValue": "nutrition", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" }, "renameOutput": true, "outputKey": "Nutrição" },
+            { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 }, "conditions": [{ "leftValue": "={{ $json.route_key }}", "rightValue": "calendar_30", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" }, "renameOutput": true, "outputKey": "Agenda 30" },
+            { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 }, "conditions": [{ "leftValue": "={{ $json.route_key }}", "rightValue": "calendar_45", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" }, "renameOutput": true, "outputKey": "Agenda 45" },
+            { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 }, "conditions": [{ "leftValue": "={{ $json.route_key }}", "rightValue": "strategic_45", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" }, "renameOutput": true, "outputKey": "Estratégico" }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [320, 0],
+      "id": "9bd5aa3c-8667-4e73-bf87-06a1af408de5",
+      "name": "Ramificar por score e rota"
+    },
+    {
+      "parameters": { "method": "POST", "url": "https://SEU-MINI-CRM.EXEMPLO/webhooks/epic/nutricao", "sendBody": true, "contentType": "raw", "rawContentType": "application/json", "body": "={{ JSON.stringify($json) }}", "options": {} },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [610, -240],
+      "id": "6f345954-a8b9-459a-a9d2-61a415b117d5",
+      "name": "CRM — Nutrição (placeholder)",
+      "disabled": true
+    },
+    {
+      "parameters": { "method": "POST", "url": "https://SEU-MINI-CRM.EXEMPLO/webhooks/epic/qualificado", "sendBody": true, "contentType": "raw", "rawContentType": "application/json", "body": "={{ JSON.stringify($json) }}", "options": {} },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [610, -80],
+      "id": "0925f23d-677f-473d-85e6-89d8a5b63f87",
+      "name": "CRM — Qualificado 30 (placeholder)",
+      "disabled": true
+    },
+    {
+      "parameters": { "method": "POST", "url": "https://SEU-MINI-CRM.EXEMPLO/webhooks/epic/qualificado-alto", "sendBody": true, "contentType": "raw", "rawContentType": "application/json", "body": "={{ JSON.stringify($json) }}", "options": {} },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [610, 80],
+      "id": "3713815d-fdb3-409a-960f-30a373268c12",
+      "name": "CRM — Qualificado 45 (placeholder)",
+      "disabled": true
+    },
+    {
+      "parameters": { "method": "POST", "url": "https://SEU-MINI-CRM.EXEMPLO/webhooks/epic/estrategico", "sendBody": true, "contentType": "raw", "rawContentType": "application/json", "body": "={{ JSON.stringify($json) }}", "options": {} },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [610, 240],
+      "id": "a324eb35-2941-41af-a728-adf17b2ea880",
+      "name": "CRM — Estratégico (placeholder)",
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [610, 400],
+      "id": "dc54087f-3742-42bf-a07d-9d2cfb7e2d3a",
+      "name": "Atualização parcial — encerrar"
+    }
+  ],
+  "connections": {
+    "Webhook — Leads": { "main": [[{ "node": "Validar, pontuar e normalizar", "type": "main", "index": 0 }]] },
+    "Validar, pontuar e normalizar": { "main": [[{ "node": "Sheets — Registrar evento", "type": "main", "index": 0 }, { "node": "Sheets — Atualizar lead", "type": "main", "index": 0 }]] },
+    "Sheets — Atualizar lead": { "main": [[{ "node": "Responder ao site", "type": "main", "index": 0 }]] },
+    "Responder ao site": { "main": [[{ "node": "Ramificar por score e rota", "type": "main", "index": 0 }]] },
+    "Ramificar por score e rota": {
+      "main": [
+        [{ "node": "CRM — Nutrição (placeholder)", "type": "main", "index": 0 }],
+        [{ "node": "CRM — Qualificado 30 (placeholder)", "type": "main", "index": 0 }],
+        [{ "node": "CRM — Qualificado 45 (placeholder)", "type": "main", "index": 0 }],
+        [{ "node": "CRM — Estratégico (placeholder)", "type": "main", "index": 0 }],
+        [{ "node": "Atualização parcial — encerrar", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1", "timezone": "America/Sao_Paulo" },
+  "active": false,
+  "versionId": "1baac2b4-550f-4b89-872f-457720a75e6c",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

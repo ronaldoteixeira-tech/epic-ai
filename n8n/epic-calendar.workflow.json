@@ -1,0 +1,276 @@
+{
+  "name": "EPIC — Disponibilidade e agendamento Google Calendar",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "epic-calendar-availability",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-1040, -300],
+      "id": "1c63acf5-6635-4020-86e7-d75575d80f31",
+      "name": "Webhook — Consultar agenda",
+      "webhookId": "695f5762-f415-47d2-b946-0609b560e60d"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst duration = [30,45].includes(Number(body.duration)) ? Number(body.duration) : 30;\nconst days = Math.max(1, Math.min(31, Number(body.days) || 21));\nconst now = new Date();\nconst timeMin = new Date(now.getTime() + 24*60*60*1000);\nconst timeMax = new Date(now.getTime() + days*24*60*60*1000);\nreturn [{json:{lead_id:body.lead_id,duration,days,timezone:'America/Sao_Paulo',timeMin:timeMin.toISOString(),timeMax:timeMax.toISOString()}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-800, -300],
+      "id": "93610c0e-cbc5-47c4-8749-bdc1fbf594f1",
+      "name": "Preparar janela"
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "operation": "availability",
+        "calendar": { "__rl": true, "value": "REPLACE_WITH_CALENDAR_ID", "mode": "id" },
+        "timeMin": "={{ $json.timeMin }}",
+        "timeMax": "={{ $json.timeMax }}",
+        "options": {
+          "outputFormat": "bookedSlots",
+          "timezone": { "__rl": true, "value": "America/Sao_Paulo", "mode": "id" }
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [-560, -300],
+      "id": "5ae4c566-85ee-4369-a2a9-0e81cb3394b1",
+      "name": "Google Calendar — Horários ocupados",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const request = $('Preparar janela').first().json;\nconst busy = $input.all().map(i => i.json).filter(i => i.start && i.end).map(i => ({start:new Date(i.start).getTime(),end:new Date(i.end).getTime()}));\nconst fmt = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'});\nconst key = d => { const p=Object.fromEntries(fmt.formatToParts(d).map(x=>[x.type,x.value])); return `${p.year}-${p.month}-${p.day}`; };\nconst pad = n => String(n).padStart(2,'0');\nconst slots=[];\nconst now=Date.now();\nfor(let offset=1;offset<=request.days;offset++){\n  const probe=new Date(now+offset*86400000);\n  const date=key(probe);\n  const noon=new Date(`${date}T12:00:00-03:00`);\n  const weekday=noon.getUTCDay();\n  if(weekday===0||weekday===6) continue;\n  for(let minute=9*60;minute+request.duration<=18*60;minute+=30){\n    const hh=pad(Math.floor(minute/60)), mm=pad(minute%60);\n    const start=new Date(`${date}T${hh}:${mm}:00-03:00`);\n    const end=new Date(start.getTime()+request.duration*60000);\n    if(start.getTime()<now+24*60*60*1000) continue;\n    if(busy.some(b=>start.getTime()<b.end && end.getTime()>b.start)) continue;\n    slots.push({start:start.toISOString(),end:end.toISOString()});\n  }\n}\nreturn [{json:{ok:true,timezone:'America/Sao_Paulo',duration:request.duration,slots:slots.slice(0,80)}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-320, -300],
+      "id": "817103f3-e540-4d07-a4ed-f9e66ca29230",
+      "name": "Gerar horários livres"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": { "responseCode": 200 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [-80, -300],
+      "id": "723a9586-c36f-4e63-bdae-22716959e5aa",
+      "name": "Responder horários"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "epic-calendar-booking",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-1040, 220],
+      "id": "e93c117a-4303-4dc7-a5f7-a5b2592217ee",
+      "name": "Webhook — Agendar",
+      "webhookId": "b6746f27-a775-4485-b409-f6ec7a26cc3b"
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Leads", "mode": "name" },
+        "filtersUI": {
+          "values": [
+            { "lookupColumn": "lead_id", "lookupValue": "={{ $('Webhook — Agendar').item.json.body.lead_id }}" }
+          ]
+        },
+        "options": { "returnFirstMatch": true }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [-800, 220],
+      "id": "c8615010-12f5-45cf-8dd6-90f64c377b4c",
+      "name": "Sheets — Buscar lead"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead=$input.first().json;\nconst request=$('Webhook — Agendar').first().json.body;\nif(!lead.lead_id) throw new Error('Lead não encontrado');\nif(lead.route_key==='nutrition'||Number(lead.epic_score)<40) throw new Error('Lead não elegível para agenda');\nconst duration=Number(lead.calendar_duration);\nif(![30,45].includes(duration)) throw new Error('Duração de agenda inválida');\nconst start=new Date(request.start);\nif(Number.isNaN(start.getTime())||start.getTime()<Date.now()+60*60*1000) throw new Error('Horário inválido');\nconst end=new Date(start.getTime()+duration*60000);\nreturn [{json:{...lead,start:start.toISOString(),end:end.toISOString(),calendar_duration:duration}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-560, 220],
+      "id": "32fdd993-7540-4287-8fef-cf0259a9f9ad",
+      "name": "Validar lead e horário"
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "operation": "availability",
+        "calendar": { "__rl": true, "value": "REPLACE_WITH_CALENDAR_ID", "mode": "id" },
+        "timeMin": "={{ $json.start }}",
+        "timeMax": "={{ $json.end }}",
+        "options": {
+          "outputFormat": "availability",
+          "timezone": { "__rl": true, "value": "America/Sao_Paulo", "mode": "id" }
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [-320, 220],
+      "id": "e53fc6b7-e69e-40de-a5a5-4a9c5ec9c394",
+      "name": "Google Calendar — Revalidar horário"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            { "id": "5a676cbf-e93e-42b0-a18f-6eebcb7c49b6", "leftValue": "={{ $json.available }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-80, 220],
+      "id": "59f688db-37e2-436e-8b5b-6308c1635987",
+      "name": "Horário ainda está livre?"
+    },
+    {
+      "parameters": {
+        "calendar": { "__rl": true, "value": "REPLACE_WITH_CALENDAR_ID", "mode": "id" },
+        "start": "={{ $('Validar lead e horário').item.json.start }}",
+        "end": "={{ $('Validar lead e horário').item.json.end }}",
+        "useDefaultReminders": false,
+        "additionalFields": {
+          "attendees": ["={{ $('Validar lead e horário').item.json.email }}"],
+          "conferenceDataUi": { "conferenceDataValues": { "conferenceSolution": "hangoutsMeet" } },
+          "description": "=Capital: {{ $('Validar lead e horário').item.json.epic_capital_90d }}\nObjeção principal: {{ $('Validar lead e horário').item.json.epic_objecao_principal }}\nObjeção final: {{ $('Validar lead e horário').item.json.epic_objecao_final }}\nScore: {{ $('Validar lead e horário').item.json.epic_score }}",
+          "guestsCanInviteOthers": false,
+          "guestsCanModify": false,
+          "sendUpdates": "all",
+          "showMeAs": "opaque",
+          "summary": "=EPIC | Conversa com {{ $('Validar lead e horário').item.json.nome }}",
+          "visibility": "private"
+        },
+        "remindersUi": {
+          "remindersValues": [
+            { "method": "email", "minutes": 1440 },
+            { "method": "popup", "minutes": 60 }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [180, 140],
+      "id": "3d76fb49-5a79-4e69-ae16-b4dd37e98c1f",
+      "name": "Google Calendar — Criar reunião"
+    },
+    {
+      "parameters": {
+        "jsCode": "const event=$input.first().json;\nconst lead=$('Validar lead e horário').first().json;\nconst meet=event.hangoutLink || event.conferenceData?.entryPoints?.find(p=>p.entryPointType==='video')?.uri || '';\nreturn [{json:{...lead,last_event:'reuniao_agendada',updated_at:new Date().toISOString(),calendar_event_id:event.id ?? '',meeting_start:lead.start,meeting_end:lead.end,meet_url:meet,tag:lead.tag}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 140],
+      "id": "8024f20d-6584-451b-a9b6-cc025fa9325f",
+      "name": "Preparar confirmação"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Leads", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": ["lead_id"],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": { "handlingExtraData": "ignoreIt" }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [660, 140],
+      "id": "12b7002b-16e3-4948-ac8e-a7f0bac0b39e",
+      "name": "Sheets — Registrar reunião"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, event_id: $json.calendar_event_id, start: $json.meeting_start, end: $json.meeting_end, meet_url: $json.meet_url } }}",
+        "options": { "responseCode": 200 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [900, 140],
+      "id": "37a8a849-3a2d-4023-b943-d93fcf9e96ea",
+      "name": "Responder confirmação"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, message: 'Este horário acabou de ser ocupado. Escolha outro.' } }}",
+        "options": { "responseCode": 409 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [180, 320],
+      "id": "a0c11bb2-6123-4381-a484-0aab9d9cc945",
+      "name": "Responder conflito"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://SEU-MINI-CRM.EXEMPLO/webhooks/epic/reuniao-agendada",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1140, 140],
+      "id": "5e189741-2886-4f3c-8e94-3ec38ed3cebf",
+      "name": "CRM — Reunião agendada (placeholder)",
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "Webhook — Consultar agenda": { "main": [[{ "node": "Preparar janela", "type": "main", "index": 0 }]] },
+    "Preparar janela": { "main": [[{ "node": "Google Calendar — Horários ocupados", "type": "main", "index": 0 }]] },
+    "Google Calendar — Horários ocupados": { "main": [[{ "node": "Gerar horários livres", "type": "main", "index": 0 }]] },
+    "Gerar horários livres": { "main": [[{ "node": "Responder horários", "type": "main", "index": 0 }]] },
+    "Webhook — Agendar": { "main": [[{ "node": "Sheets — Buscar lead", "type": "main", "index": 0 }]] },
+    "Sheets — Buscar lead": { "main": [[{ "node": "Validar lead e horário", "type": "main", "index": 0 }]] },
+    "Validar lead e horário": { "main": [[{ "node": "Google Calendar — Revalidar horário", "type": "main", "index": 0 }]] },
+    "Google Calendar — Revalidar horário": { "main": [[{ "node": "Horário ainda está livre?", "type": "main", "index": 0 }]] },
+    "Horário ainda está livre?": {
+      "main": [
+        [{ "node": "Google Calendar — Criar reunião", "type": "main", "index": 0 }],
+        [{ "node": "Responder conflito", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Calendar — Criar reunião": { "main": [[{ "node": "Preparar confirmação", "type": "main", "index": 0 }]] },
+    "Preparar confirmação": { "main": [[{ "node": "Sheets — Registrar reunião", "type": "main", "index": 0 }]] },
+    "Sheets — Registrar reunião": { "main": [[{ "node": "Responder confirmação", "type": "main", "index": 0 }]] },
+    "Responder confirmação": { "main": [[{ "node": "CRM — Reunião agendada (placeholder)", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1", "timezone": "America/Sao_Paulo" },
+  "active": false,
+  "versionId": "079e3871-92c9-47c6-b1f5-c33b96fe161a",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}
