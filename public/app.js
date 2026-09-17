@@ -305,13 +305,20 @@ function renderCapture() {
         <p class="eyebrow">Epic Rental Car · Orlando</p>
         <h1 id="capture-title">Renda em dólar, em Orlando, a partir de US$ 15 mil.</h1>
         <p class="lead">Uma operação real de frota — carro, placa, contrato e locatário. Não uma promessa de tela.</p>
-        <div class="asset-placeholder" role="img" aria-label="Espaço reservado para foto real da frota em Orlando">
-          <div>
-            <span class="placeholder-icon" aria-hidden="true">E</span>
-            <strong>Foto real da frota em Orlando</strong>
-            <span>Placeholder temporário · substituir antes da publicação final</span>
-          </div>
-        </div>
+        <figure class="capture-fleet">
+          <img
+            src="./nossa-frota.png"
+            alt="Operação e desempenho real da nossa frota em Orlando — Epic Rental Car"
+            class="capture-fleet-img"
+            width="1057"
+            height="935"
+            loading="eager"
+          />
+          <figcaption class="capture-fleet-caption">
+            <span class="fleet-live-dot" aria-hidden="true"></span>
+            Operação real monitorada em Orlando · Carros ativos
+          </figcaption>
+        </figure>
       </div>
       <form class="capture-form" id="capture-form" novalidate>
         <p class="lead">Responda 12 perguntas rápidas. Se fizer sentido, você agenda uma conversa comigo e sai com a simulação do seu cenário.</p>

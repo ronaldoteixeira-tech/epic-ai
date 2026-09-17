@@ -236,6 +236,51 @@ h3 {
   color: rgba(255, 255, 255, 0.84);
 }
 
+.capture-fleet {
+  display: flex;
+  flex-direction: column;
+  margin: auto 0 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 16px 36px rgba(2, 36, 76, 0.28);
+  background: #ffffff;
+  transition: transform 240ms ease, box-shadow 240ms ease;
+}
+
+.capture-fleet:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 42px rgba(2, 36, 76, 0.35);
+}
+
+.capture-fleet-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.capture-fleet-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: rgba(3, 49, 104, 0.95);
+  color: #e2efff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.fleet-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+  flex-shrink: 0;
+}
+
 .asset-placeholder {
   display: grid;
   min-height: 180px;
