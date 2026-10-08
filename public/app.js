@@ -211,6 +211,22 @@ function initialState() {
 }
 
 function loadState() {
+  const params = new URLSearchParams(window.location.search);
+  if (
+    params.has("reset") ||
+    params.has("novo") ||
+    params.has("restart") ||
+    params.has("teste") ||
+    params.has("limpar")
+  ) {
+    try {
+      localStorage.removeItem(CONFIG.storageKey);
+      localStorage.removeItem(CONFIG.pendingKey);
+      sessionStorage.clear();
+    } catch {}
+    return initialState();
+  }
+
   try {
     const saved = JSON.parse(localStorage.getItem(CONFIG.storageKey));
     if (saved?.version === "1.1" && saved?.leadId) {
@@ -220,6 +236,18 @@ function loadState() {
     localStorage.removeItem(CONFIG.storageKey);
   }
   return initialState();
+}
+
+export function resetEpicJourney() {
+  try {
+    localStorage.removeItem(CONFIG.storageKey);
+    localStorage.removeItem(CONFIG.pendingKey);
+    sessionStorage.clear();
+  } catch {}
+  window.location.href = window.location.pathname;
+}
+if (typeof window !== "undefined") {
+  window.resetEpicJourney = resetEpicJourney;
 }
 
 function saveState() {
@@ -828,12 +856,18 @@ function renderNutrition(classification) {
       <a class="button" href="${CONFIG.nutritionMaterialUrl}" target="_blank" rel="noopener noreferrer" data-material>
         Receber o material no WhatsApp
       </a>
+      <div style="margin-top: 14px;">
+        <button class="button button-secondary" type="button" data-action="restart-flow">
+          Reiniciar diagnóstico
+        </button>
+      </div>
       <p class="privacy-note">Material provisório para validação interna. O PDF definitivo substituirá este arquivo.</p>
     </section>
   `;
   document.querySelector("[data-material]").addEventListener("click", () => {
     track("material_nutricao_acessado", { epic_score: classification.score });
   });
+  document.querySelector("[data-action='restart-flow']")?.addEventListener("click", resetEpicJourney);
   focusScreen();
 }
 
@@ -1044,8 +1078,14 @@ function renderBookingConfirmation(booking) {
       <div class="meeting-summary"><strong>${escapeHtml(formatted)}</strong><br />Horário de Brasília · ${Number(booking.duration) || 30} minutos</div>
       <p class="lead">O convite será enviado para o seu e-mail. Vou preparar a conversa considerando o valor e a objeção que você indicou.</p>
       ${booking.meet_url ? `<a class="button" href="${escapeHtml(booking.meet_url)}" target="_blank" rel="noopener noreferrer">Abrir link do Google Meet</a>` : ""}
+      <div style="margin-top: 14px;">
+        <button class="button button-secondary" type="button" data-action="restart-flow">
+          Fazer novo teste / Reiniciar
+        </button>
+      </div>
     </section>
   `;
+  document.querySelector("[data-action='restart-flow']")?.addEventListener("click", resetEpicJourney);
   focusScreen();
 }
 
